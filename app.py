@@ -2,30 +2,43 @@ import os, boto3
 
 DIST_ID       = os.environ['DIST_ID']
 SORRY_PATTERN = os.environ.get('SORRY_PATTERN', '*')
-SORRY_PRIO    = 0          # 閉塞時に与える優先度
 
-# CloudFrontはグローバルサービスなので、us-east-1リージョンを使用する必要がある
-cf = boto3.client('cloudfront', region_name='us-east-1')
+cf   = boto3.client('cloudfront', region_name='us-east-1')
 
 def lambda_handler(event, context):
-    # 1. 現行設定と ETag
+    # 1. 現行設定取得
     res   = cf.get_distribution_config(Id=DIST_ID)
     cfg   = res['DistributionConfig']
     etag  = res['ETag']
 
-    # 2. CacheBehavior の Priority を並べ替え
+    # 2. CacheBehavior を抽出
     items = cfg.get('CacheBehaviors', {}).get('Items', [])
-    for beh in items:
-        if beh['PathPattern'] == SORRY_PATTERN:
-            beh['Priority'] = SORRY_PRIO      # Sorry を 0 番へ
-        else:
-            if beh['Priority'] <= SORRY_PRIO: # 衝突回避
-                beh['Priority'] += 1          # 0→1,1→2 … と後ろへ
 
-    # 3. 更新
+    # 3. 「Sorry」と「その他」に分離
+    sorry  = None
+    others = []
+    for b in items:
+        if b['PathPattern'] == SORRY_PATTERN:
+            sorry = b
+        else:
+            others.append(b)
+
+    # 4. Priority を 0,1,2,3… に振り直し
+    priority = 0
+    if sorry:
+        sorry['Priority'] = priority
+        priority += 1
+
+    # 元の順序を保ったまま残りに連番を振る
+    for b in sorted(others, key=lambda x: x['Priority']):
+        b['Priority'] = priority
+        priority += 1
+
+    # 5. 更新
     cf.update_distribution(
         Id=DIST_ID,
         DistributionConfig=cfg,
         IfMatch=etag
     )
+
     return {"message": "closed (sorry-page enabled)"}
