@@ -13,9 +13,8 @@ resource "aws_lambda_function" "cloudfront_behavior_switcher" {
 
   environment {
     variables = {
-      DIST_ID        = var.distribution_id
-      MAINT_PATTERN  = var.maintenance_pattern
-      TARGET_PRIORITY = var.target_priority
+      DIST_ID       = var.distribution_id
+      SORRY_PATTERN = var.sorry_pattern
     }
   }
 }
