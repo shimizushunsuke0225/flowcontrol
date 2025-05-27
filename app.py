@@ -4,6 +4,7 @@ DIST_ID       = os.environ['DIST_ID']
 SORRY_PATTERN = os.environ.get('SORRY_PATTERN', '*')
 SORRY_PRIO    = 0          # 閉塞時に与える優先度
 
+# CloudFrontはグローバルサービスなので、us-east-1リージョンを使用する必要がある
 cf = boto3.client('cloudfront', region_name='us-east-1')
 
 def lambda_handler(event, context):

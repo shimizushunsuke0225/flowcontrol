@@ -1,14 +1,21 @@
 provider "aws" {
-  region = "us-east-1"
+  region = "ap-northeast-1"
+}
+
+# Lambda用のZIPファイルを作成
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/app.py"
+  output_path = "${path.module}/lambda_function.zip"
 }
 
 resource "aws_lambda_function" "cloudfront_behavior_switcher" {
-  function_name = "cloudfront-behavior-switcher"
+  function_name = "ptl-inf-pocverify-cloudfront-behavior-switcher"
   handler       = "app.lambda_handler"
   runtime       = "python3.12"
   role          = aws_iam_role.lambda_role.arn
-  filename      = "${path.module}/lambda_function.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda_function.zip")
+  filename      = data.archive_file.lambda_zip.output_path
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   timeout       = 30
 
   environment {
@@ -17,10 +24,12 @@ resource "aws_lambda_function" "cloudfront_behavior_switcher" {
       SORRY_PATTERN = var.sorry_pattern
     }
   }
+
+  depends_on = [data.archive_file.lambda_zip]
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "cloudfront_behavior_switcher_role"
+  name = "ptl-inf-pocverify-cloudfront-switcher-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -37,7 +46,7 @@ resource "aws_iam_role" "lambda_role" {
 }
 
 resource "aws_iam_policy" "lambda_policy" {
-  name        = "cloudfront_behavior_switcher_policy"
+  name        = "ptl-inf-pocverify-cloudfront-switcher-policy"
   description = "Policy for CloudFront behavior switcher Lambda"
 
   policy = jsonencode({
@@ -68,18 +77,4 @@ resource "aws_iam_policy" "lambda_policy" {
 resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = aws_iam_policy.lambda_policy.arn
-}
-
-# Lambda関数のデプロイパッケージを作成するためのnullリソース
-resource "null_resource" "lambda_package" {
-  triggers = {
-    source_code = filemd5("${path.module}/app.py")
-  }
-
-  provisioner "local-exec" {
-    command = <<EOT
-      cd ${path.module}
-      zip -r lambda_function.zip app.py
-    EOT
-  }
 }
